@@ -3,5 +3,5 @@ train: data/image/train
 val: data/image/val
 test: data/image/test
 
-nc: 
-names: ['banane', 'plat']
+nc: nbr_classes
+names: ['banane', 'plat','couteau','oeuf','baguette']
