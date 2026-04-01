@@ -1,7 +1,0 @@
-
-train: data/image/train
-val: data/image/val
-test: data/image/test
-
-nc: nbr_classes
-names: ['banane', 'plat','couteau','oeuf','baguette']
