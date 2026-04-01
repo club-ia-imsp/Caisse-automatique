@@ -1,67 +1,47 @@
-# automaticCHECK — Guide de démarrage
+﻿# automaticCHECK
+
+Caisse automatique intelligente — reconnaît les produits par caméra, génère un panier et produit une facture PDF.
+
+---
 
 ## Prérequis
 
-| Outil | Version | Vérification |
-|-------|---------|--------------|
-| Python | 3.11 | `python --version` |
-| Node.js | 18 ou 22+ | `node --version` |
-| Docker Desktop | Dernière | Pour la base de données |
+| Outil | Vérification |
+|-------|-------------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | `docker --version` |
+| [Git](https://git-scm.com/) | `git --version` |
+
+> C'est tout. Python et Node.js ne sont **pas** requis sur votre machine.
 
 ---
 
-## Démarrage en 3 étapes
+## Lancement en 3 commandes
 
-### Étape 1 — Démarrer la base de données (Docker)
+```bash
+# 1. Cloner le dépôt
+git clone <URL_DU_DEPOT>
+cd Caisse-automatique/Caisse
 
-```powershell
-docker compose -f docker-compose.db.yml up -d
+# 2. (Première fois) Copier le fichier d'environnement
+copy .env.example .env
+
+# 3. Construire et démarrer tous les services
+docker compose up --build
 ```
 
-Attendre que le conteneur soit **healthy** (~10 secondes). Vérifier :
-
-```powershell
-docker ps
+L'application est prête quand vous voyez :
+```
+automaticcheck_backend  | INFO:     Application startup complete.
 ```
 
-Le statut doit afficher `(healthy)`.
+| Service | URL |
+|---------|-----|
+| **Application** | http://localhost:3000 |
+| **API Swagger** | http://localhost:8000/docs |
 
 ---
 
-### Étape 2 — Démarrer le backend (FastAPI)
-
-Double-cliquer sur **`start_backend.bat`**
-
-Ou dans PowerShell :
-
-```powershell
-.\start_backend.bat
-```
-
-Le backend est prêt quand on voit :
-```
-INFO: Application startup complete.
-```
-
-Swagger API disponible sur : http://localhost:8000/docs
-
----
-
-### Étape 3 — Démarrer le frontend (React/Vite)
-
-Double-cliquer sur **`start_frontend.bat`**
-
-Ou dans PowerShell :
-
-```powershell
-.\start_frontend.bat
-```
-
-L'application est disponible sur : **http://localhost:3000**
-
----
-
-## Connexion
+## Connexion par défaut
 
 | Champ | Valeur |
 |-------|--------|
@@ -70,58 +50,65 @@ L'application est disponible sur : **http://localhost:3000**
 
 ---
 
-## Structure du projet
+## Commandes utiles
 
-```
-automaticCHECK/
-├── .env                    ← Variables d'environnement
-├── best_caisse.pt          ← Modèle YOLO entraîné (10 produits)
-├── start_backend.bat       ← Lancer le backend
-├── start_frontend.bat      ← Lancer le frontend
-├── docker-compose.db.yml   ← Base de données PostgreSQL seule
-│
-├── backend/
-│   ├── app/
-│   │   ├── api/            ← Routes FastAPI
-│   │   ├── models/         ← Modèles SQLAlchemy
-│   │   ├── schemas/        ← Schémas Pydantic
-│   │   ├── services/       ← IA (YOLO + ResNet18) + PDF
-│   │   ├── utils/          ← Sécurité (hash mots de passe, JWT)
-│   │   ├── config.py       ← Configuration
-│   │   ├── database.py     ← Connexion PostgreSQL
-│   │   └── main.py         ← Point d'entrée FastAPI
-│   ├── requirements.txt    ← Dépendances Python
-│   └── uploads/            ← Images des produits
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/     ← Composants réutilisables
-│   │   ├── context/        ← AuthContext (gestion session)
-│   │   ├── pages/          ← Pages de l'application
-│   │   ├── services/       ← Client API (axios)
-│   │   ├── App.jsx         ← Routeur principal
-│   │   └── index.jsx       ← Point d'entrée React
-│   ├── vite.config.js      ← Configuration Vite + proxy
-│   └── package.json
-│
-└── db/
-    └── init.sql            ← Script de création des tables
+```bash
+# Lancer en arrière-plan (sans bloquer le terminal)
+docker compose up --build -d
+
+# Voir les logs en temps réel
+docker compose logs -f
+
+# Logs d'un seul service
+docker compose logs -f backend
+
+# Arrêter les conteneurs
+docker compose down
+
+# Arrêter ET supprimer les données (reset complet)
+docker compose down -v
+
+# Reconstruire après modification du code
+docker compose up --build
 ```
 
 ---
 
-## En cas de problème
+## Structure du projet
 
-### Le backend ne démarre pas
-- Vérifier que le conteneur Docker est bien `healthy` : `docker ps`
-- Vérifier que le port 8000 n'est pas utilisé : `netstat -ano | findstr 8000`
-
-### Le frontend affiche des erreurs de connexion
-- Vérifier que le backend tourne sur le port 8000
-- Ouvrir http://localhost:8000/api/health — doit retourner `{"status":"healthy"}`
-
-### Arrêter tout
-```powershell
-docker compose -f docker-compose.db.yml down
-# Fermer les fenêtres du backend et frontend
 ```
+Caisse/
+├── backend/
+│   ├── Dockerfile          ← Image du backend FastAPI
+│   ├── requirements.txt
+│   └── app/                ← Code FastAPI (routes, modèles, IA)
+├── frontend/
+│   ├── Dockerfile          ← Image nginx (build React + proxy)
+│   ├── nginx.conf          ← Config nginx (proxy /api, /ws, /uploads)
+│   └── src/                ← Code React
+├── db/
+│   └── init.sql            ← Initialisation PostgreSQL + pgvector
+├── docker-compose.yml      ← Orchestre les 3 services
+├── .env                    ← Variables d'environnement (secrets)
+├── .env.example            ← Template .env à copier
+├── best_caisse.pt          ← Modèle YOLO entraîné (10 produits)
+└── DOCUMENTATION.md        ← Documentation technique complète
+```
+
+---
+
+## Personalisation
+
+Toutes les variables (mots de passe, clé JWT, etc.) se trouvent dans `.env` :
+
+```env
+POSTGRES_PASSWORD=monmotdepasse
+SECRET_KEY=une-cle-longue-et-aleatoire
+DEFAULT_ADMIN_PASSWORD=monmotdepasseadmin
+```
+
+Modifiez `.env` puis relancez `docker compose up --build`.
+
+---
+
+Pour la documentation technique complète (architecture, IA, API, base de données), voir [DOCUMENTATION.md](DOCUMENTATION.md).

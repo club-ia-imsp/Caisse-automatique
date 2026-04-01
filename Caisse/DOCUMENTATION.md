@@ -13,6 +13,7 @@
 9. [Flux d'utilisation](#9-flux-dutilisation)
 10. [Configuration](#10-configuration)
 11. [Sécurité](#11-sécurité)
+12. [Guide de démarrage (nouveau développeur)](#12-guide-de-démarrage-nouveau-développeur)
 
 ---
 
@@ -447,6 +448,149 @@ Toutes les variables sont dans le fichier **`.env`** à la racine du projet.
 ### CORS
 
 - Limité à `http://localhost:3000` et `http://127.0.0.1:3000` en développement
+
+---
+
+*Documentation générée pour automaticCHECK v1.0*
+
+---
+
+## 12. Guide de démarrage (nouveau développeur)
+
+Ce guide permet à toute personne de cloner le projet et de le lancer **de zéro** avec une seule commande Docker.
+
+---
+
+### 12.1 Prérequis
+
+| Outil | Lien | Vérification |
+|-------|------|-------------|
+| **Docker Desktop** | https://www.docker.com/products/docker-desktop/ | `docker --version` |
+| **Git** | https://git-scm.com/ | `git --version` |
+
+> Python et Node.js **ne sont pas nécessaires** sur votre machine — tout s'exécute dans des conteneurs.
+
+---
+
+### 12.2 Étape 1 — Cloner le dépôt
+
+```bash
+git clone <URL_DU_DEPOT>
+cd Caisse-automatique/Caisse
+```
+
+---
+
+### 12.3 Étape 2 — Créer le fichier d'environnement
+
+```bash
+# Windows
+copy .env.example .env
+
+# Linux / Mac
+cp .env.example .env
+```
+
+Le fichier `.env` contient les mots de passe et secrets. Les valeurs par défaut fonctionnent directement en développement. Pour la production, modifiez `SECRET_KEY`, `POSTGRES_PASSWORD` et `DEFAULT_ADMIN_PASSWORD`.
+
+---
+
+### 12.4 Étape 3 — Construire et démarrer tous les services
+
+```bash
+docker compose up --build
+```
+
+Docker va automatiquement :
+1. Télécharger les images PostgreSQL/pgvector, Python et nginx
+2. Construire l'image du backend FastAPI (installe les dépendances Python)
+3. Construire l'image du frontend (compile le code React, configure nginx)
+4. Démarrer les 3 conteneurs dans le bon ordre (db → backend → frontend)
+5. Initialiser la base de données via `db/init.sql`
+6. Créer le compte admin par défaut au premier démarrage
+
+> **Durée :** 3 à 10 minutes à la première exécution (téléchargements). Les fois suivantes : quelques secondes.
+
+L'application est prête quand vous voyez :
+```
+automaticcheck_backend  | INFO:     Application startup complete.
+```
+
+| Service | URL |
+|---------|-----|
+| Application | http://localhost:3000 |
+| API Swagger | http://localhost:8000/docs |
+
+---
+
+### 12.5 Connexion et premier produit
+
+1. Ouvrez **http://localhost:3000**
+2. Connectez-vous :
+   - **Identifiant :** `admin`
+   - **Mot de passe :** `admin123`
+3. Allez dans **Produits → Ajouter un produit**
+4. Remplissez le nom, le prix, la catégorie et le stock
+5. Uploadez **5 photos** (5 angles : face, dessus, gauche, droite, arrière)
+6. Cliquez **"Entraîner le modèle"** → le produit est désormais reconnaissable
+7. Allez dans **Caisse**, démarrez la caméra, placez l'article → il apparaît dans le panier
+
+---
+
+### 12.6 Commandes quotidiennes
+
+```bash
+# Lancer en arrière-plan (sans bloquer le terminal)
+docker compose up --build -d
+
+# Voir les logs en temps réel
+docker compose logs -f
+
+# Logs d'un seul service
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f db
+
+# Arrêter sans perdre les données
+docker compose down
+
+# Reset complet (supprime les données de la base ET les uploads)
+docker compose down -v
+
+# Reconstruire après un changement de code
+docker compose up --build
+```
+
+---
+
+### 12.7 Structure des fichiers liés à Docker
+
+```
+Caisse/
+├── docker-compose.yml        ← Orchestre les 3 services
+├── .env                      ← Variables d'environnement (secrets)
+├── .env.example              ← Template à copier
+├── backend/
+│   └── Dockerfile            ← Image FastAPI (Python 3.11 slim)
+├── frontend/
+│   ├── Dockerfile            ← Image nginx (build React multi-stage)
+│   └── nginx.conf            ← Proxy /api, /ws, /uploads → backend
+└── db/
+    └── init.sql              ← Création des tables au premier démarrage
+```
+
+---
+
+### 12.8 Résolution des problèmes courants
+
+| Problème | Cause probable | Solution |
+|----------|---------------|----------|
+| `Cannot connect to Docker daemon` | Docker Desktop non démarré | Ouvrir Docker Desktop et attendre qu'il soit prêt |
+| `port is already allocated` | Le port 3000 ou 8000 est occupé | Arrêtez le service qui utilise le port, ou modifiez les ports dans `docker-compose.yml` |
+| Backend redémarre en boucle | La DB n'est pas encore prête | Normal au premier démarrage — le backend réessaie automatiquement 15 fois |
+| `YOLO model not found` | `best_caisse.pt` absent | Vérifiez que le fichier `best_caisse.pt` est bien dans `Caisse/` |
+| Page blanche sur `localhost:3000` | Build du frontend non terminé | Attendez que le build soit terminé, puis rechargez la page |
+| Données perdues après `down` | Volumes supprimés | Utilisez `docker compose down` (sans `-v`) pour préserver les données |
 
 ---
 
