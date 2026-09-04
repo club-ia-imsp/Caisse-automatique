@@ -1,0 +1,19 @@
+# Environnements et caches Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Configuration sensible et données générées localement
+.env
+.env.*
+*.db
+
+# Journaux, fichiers temporaires et sortie locale
+*.log
+tmp/
+output/
+
+# Configuration de l'éditeur
+.vscode/
+.idea/

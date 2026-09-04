@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cahier des charges · AutomaticCheck</title>
+  <style>
+    :root{--bg:#f4f7f4;--panel:#fff;--ink:#17231d;--muted:#617169;--line:#dce5df;--accent:#168052;--nav:#10271c}[data-theme="dark"]{--bg:#0c1511;--panel:#14211a;--ink:#edf6ef;--muted:#a4b7aa;--line:#2a3c31;--accent:#55c889;--nav:#09140e}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:17px max(24px,calc((100vw - 1000px)/2));background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}.bar a{color:var(--accent);text-decoration:none;font-weight:800}.bar button{border:0;border-radius:99px;padding:7px 10px;background:var(--nav);color:#fff;cursor:pointer}.doc{max-width:930px;margin:0 auto;padding:70px 30px 90px}.loading{color:var(--muted)}h1{font-size:48px;line-height:1.1;letter-spacing:-.045em;margin:0 0 12px}h2{margin:58px 0 16px;font-size:30px;line-height:1.18;letter-spacing:-.03em}h3{margin:32px 0 10px;font-size:21px}p{margin:0 0 17px}strong{color:var(--ink)}ul,ol{padding-left:24px;margin:0 0 20px}li{margin:5px 0}table{width:100%;margin:22px 0 28px;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{background:color-mix(in srgb,var(--accent) 9%,var(--panel));font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}tr:last-child td{border-bottom:0}code{padding:2px 5px;border-radius:4px;background:color-mix(in srgb,var(--accent) 11%,var(--panel));color:var(--accent)}.meta{color:var(--muted);margin-bottom:37px}.error{padding:18px;border-left:4px solid #c44;background:#fee;color:#722}@media(max-width:650px){.doc{padding:45px 20px}.doc h1{font-size:37px}h2{font-size:27px}table{display:block;overflow:auto}}
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="index.html">← Documentation AutomaticCheck</a><button id="themeButton" type="button" aria-label="Changer le thème">☾</button></header>
+  <main id="document" class="doc"><p class="loading">Chargement du cahier des charges…</p></main>
+  <script>
+    const root=document.documentElement, button=document.getElementById('themeButton');
+    root.dataset.theme=localStorage.getItem('automaticcheck-theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+    const label=()=>button.textContent=root.dataset.theme==='dark'?'☀':'☾'; label();
+    button.onclick=()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('automaticcheck-theme',root.dataset.theme);label()};
+    const escapeHtml=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const inline=s=>escapeHtml(s).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\x60(.*?)\x60/g,'<code>$1</code>');
+    function render(md){
+      const lines=md.replace(/\r/g,'').split('\n'); let html='',i=0;
+      while(i<lines.length){let l=lines[i];
+        if(!l.trim()){i++;continue}
+        if(/^# /.test(l)){html+='<h1>'+inline(l.slice(2))+'</h1>';i++;continue}
+        if(/^## /.test(l)){html+='<h2>'+inline(l.slice(3))+'</h2>';i++;continue}
+        if(/^### /.test(l)){html+='<h3>'+inline(l.slice(4))+'</h3>';i++;continue}
+        if(/^\|/.test(l)){let rows=[];while(i<lines.length&&/^\|/.test(lines[i])){if(!/^\|[-| ]+\|?$/.test(lines[i]))rows.push(lines[i].split('|').slice(1,-1));i++}if(rows.length){html+='<table><thead><tr>'+rows[0].map(x=>'<th>'+inline(x.trim())+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(1).map(r=>'<tr>'+r.map(x=>'<td>'+inline(x.trim())+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}continue}
+        if(/^- /.test(l)){let items=[];while(i<lines.length&&/^- /.test(lines[i])){items.push(lines[i].slice(2));i++}html+='<ul>'+items.map(x=>'<li>'+inline(x)+'</li>').join('')+'</ul>';continue}
+        if(/^\d+\. /.test(l)){let items=[];while(i<lines.length&&/^\d+\. /.test(lines[i])){items.push(lines[i].replace(/^\d+\. /,''));i++}html+='<ol>'+items.map(x=>'<li>'+inline(x)+'</li>').join('')+'</ol>';continue}
+        if(/^\*\*.*\*\*\s*$/.test(l)){html+='<p class="meta">'+inline(l)+'</p>';i++;continue}
+        html+='<p>'+inline(l)+'</p>';i++;
+      } return html;
+    }
+    fetch('assets/cahier.md').then(r=>{if(!r.ok)throw Error();return r.text()}).then(t=>document.getElementById('document').innerHTML=render(t)).catch(()=>document.getElementById('document').innerHTML='<p class="error">Le cahier des charges ne peut pas être chargé. Rafraîchissez la page ou vérifiez que le serveur local est démarré.</p>');
+  </script>
+</body>
+</html>
