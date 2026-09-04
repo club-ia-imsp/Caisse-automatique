@@ -1,0 +1,45 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Code · AutomaticCheck</title><link rel="stylesheet" href="../assets/site.css"></head><body><aside class="sidebar"><a class="brand" href="../index.html"><span>AC</span><strong>AutomaticCheck<small>Documentation produit</small></strong></a><nav><p>Introduction</p><a href="../index.html">Vue d’ensemble</a><a href="demarrage.html">Démarrage rapide</a><p>Conception</p><a href="architecture.html">Architecture</a><a href="materiel.html">Matériel RFID</a><p>Référence technique</p><a href="api.html">API HTTP</a><a class="active" href="code.html">Guide du code</a><a class="nested" href="#backend">Backend Python</a><a class="nested" href="#frontend">Interface web</a><a class="nested" href="#arduino">Sketch Arduino</a><p>Projet</p><a href="../../CAHIER_DES_CHARGES_AUTOMATICCHECK.md">Cahier des charges</a></nav></aside><main><header class="top"><span>Lecture du code</span><a href="../index.html">Accueil</a></header><article class="content"><p class="eyebrow">RÉFÉRENCE COMMENTÉE</p><h1>Comment le projet a été codé.</h1><p class="lead">Cette page explique chaque instruction utile du projet par blocs cohérents. Les lignes de mise en forme, accolades et fermetures sont décrites avec l’instruction qu’elles encadrent : elles n’ajoutent pas de comportement propre.</p><h2 id="backend">Backend · <code>backend.py</code></h2><pre class="code"><code><span class="comment"># chemins et configuration</span>
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "produits.db"
+PORT = os.environ.get("RFID_PORT", "COM4")
+BAUDRATE = int(os.environ.get("RFID_BAUD", "115200"))
+
+cart_items = []
+cart_total = 0
+cart_lock = threading.Lock()</code></pre><div class="line-notes"><div class="line-note"><code>import …</code> charge les modules : système, expressions régulières, chemins, SQLite, concurrence, temps, port série et Flask.</div><div class="line-note"><code>BASE_DIR</code> calcule le dossier réel du script ; les fichiers restent accessibles quel que soit le dossier depuis lequel Python est lancé.</div><div class="line-note"><code>DB_PATH</code> compose le chemin de la base. <code>PORT</code> et <code>BAUDRATE</code> lisent d’abord les variables d’environnement, sinon utilisent COM4/115200.</div><div class="line-note"><code>cart_items</code> contient les articles actuels ; <code>cart_total</code> mémorise leur somme ; <code>cart_lock</code> empêche que le thread RFID et une requête web les modifient simultanément.</div></div><pre class="code"><code>def normaliser_uid(uid):
+    return re.sub(r"[^0-9A-Fa-f]", "", uid or "").upper()
+
+def ajouter_uid(uid, source="rfid"):
+    uid_normalise = normaliser_uid(uid)
+    <span class="comment"># verrou, délai anti-double lecture, requête SQLite</span>
+    cursor.execute("SELECT uid, nom, prix, categorie FROM produits WHERE UPPER(uid) = ?", (uid_normalise,))
+    <span class="comment"># si l’UID est déjà présent : retrait ; sinon : ajout</span></code></pre><div class="line-notes"><div class="line-note"><code>normaliser_uid</code> supprime chaque caractère non hexadécimal avec <code>re.sub</code>, traite une valeur absente comme une chaîne vide et transforme le résultat en majuscules.</div><div class="line-note"><code>ajouter_uid</code> note l’heure, consulte <code>dernier_scan_par_uid</code> sous verrou et renvoie immédiatement si le même badge revient avant 2 secondes.</div><div class="line-note"><code>cursor.execute(..., (uid_normalise,))</code> utilise un paramètre SQLite, ce qui évite de concaténer l’UID dans le SQL. Le dictionnaire <code>item</code> reprend ensuite les quatre champs utilisés par l’interface.</div><div class="line-note">La recherche d’index avec <code>next(..., None)</code> localise le même UID. <code>pop</code> et <code>cart_total -=</code> le retirent, sinon <code>append</code> et <code>+=</code> l’ajoutent. <code>last_scan</code> est mis à jour dans les deux cas.</div></div><pre class="code"><code>@app.route("/api/cart")
+def api_cart():
+    with cart_lock:
+        return jsonify({"items": list(cart_items), "total": cart_total, ...})
+
+thread = threading.Thread(target=lecture_rfid, daemon=True)
+thread.start()
+app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)</code></pre><div class="line-notes"><div class="line-note"><code>@app.route</code> associe une URL à la fonction placée dessous. Les routes API délèguent à <code>ajouter_uid</code>, lisent SQLite ou remettent le panier à zéro.</div><div class="line-note"><code>with cart_lock</code> libère automatiquement le verrou à la fin du bloc. <code>jsonify</code> sérialise les données Python en réponse HTTP JSON.</div><div class="line-note"><code>threading.Thread(..., daemon=True)</code> lance la lecture RFID sans bloquer Flask ; <code>daemon=True</code> arrête ce thread quand le processus principal s’arrête. <code>0.0.0.0</code> rend le serveur accessible sur le réseau local.</div></div><h2 id="frontend">Interface · HTML, CSS et JavaScript</h2><pre class="code"><code>const cartBadge = document.getElementById('cartBadge');
+let cart = [];
+let total = 0;
+
+async function refreshCart() {
+  const response = await fetch('/api/cart?t=' + Date.now(), { cache: 'no-store' });
+  const data = await response.json();
+  cart = data.items || [];
+  total = data.total || 0;
+  renderCart();
+}
+setInterval(refreshCart, 1000);</code></pre><div class="line-notes"><div class="line-note"><code>getElementById</code> conserve une référence aux éléments HTML que le script doit modifier. Les <code>const</code> ne changent pas de référence ; <code>let</code> est utilisé pour l’état qui évolue.</div><div class="line-note"><code>fetch</code> appelle l’API ; l’horodatage et <code>no-store</code> évitent une réponse mise en cache. <code>await</code> attend la réponse puis le JSON sans bloquer l’interface.</div><div class="line-note"><code>data.items || []</code> garantit un tableau même si l’API ne renvoie pas d’articles. <code>renderCart</code> affiche cet état ; <code>setInterval</code> répète le rafraîchissement chaque seconde.</div><div class="line-note">Le HTML fournit les zones identifiées par <code>id</code> et les boutons ; le CSS organise les cartes, couleurs, états <code>disabled</code>, vues masquées et adaptation mobile. Chaque règle CSS applique la propriété indiquée à son sélecteur : aucune logique métier n’y est cachée.</div></div><h2 id="arduino">Arduino · <code>.ino</code></h2><pre class="code"><code>#include &lt;SPI.h&gt;
+#include &lt;MFRC522.h&gt;
+#define SS_PIN 5
+#define RST_PIN 22
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+void setup() { Serial.begin(115200); SPI.begin(); rfid.PCD_Init(); }
+void loop() {
+  if (!rfid.PICC_IsNewCardPresent()) return;
+  if (!rfid.PICC_ReadCardSerial()) return;
+  <span class="comment">// conversion de chaque octet en UID hexadécimal puis Serial.println(uid)</span>
+}</code></pre><div class="line-notes"><div class="line-note"><code>#include</code> importe les bibliothèques SPI et MFRC522. Les <code>#define</code> donnent un nom aux broches, puis le constructeur crée l’objet lecteur avec ces deux broches.</div><div class="line-note"><code>setup</code> s’exécute une seule fois : liaison série, bus SPI et lecteur sont initialisés. <code>loop</code> tourne continuellement.</div><div class="line-note">Les deux conditions renvoient immédiatement tant qu’aucun tag n’est présent ou lisible. La boucle <code>for</code> parcourt chaque octet de l’UID ; le zéro initial garantit deux chiffres hexadécimaux. <code>toUpperCase</code> harmonise le format et <code>Serial.println</code> le termine par une nouvelle ligne, attendue par Python.</div></div><h2>Fichiers auxiliaires</h2><ul><li><code>create_db.py</code> ouvre SQLite, crée <code>produits</code>, injecte les produits via <code>executemany</code>, confirme avec <code>commit</code>, ferme puis affiche une confirmation.</li><li><code>app.py</code> est une ancienne interface Tkinter locale. Elle illustre le même principe RFID, mais l’exécution recommandée est <code>backend.py</code> avec l’interface web.</li></ul><div class="footer-nav"><a href="api.html">← API HTTP</a><a href="../../CAHIER_DES_CHARGES_AUTOMATICCHECK.md">Cahier des charges →</a></div></article></main></body></html>
